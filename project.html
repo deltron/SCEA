@@ -1,0 +1,130 @@
+<html>
+	<head>
+		<title>Fly By Night Architecture</title>
+	</head>
+	<body>
+
+<table width="600">
+	<tr>
+		<td>
+			<h1>Fly By Night Architecture</h1>
+by David Leblanc (SCEA ID #SR2313378)<br>
+
+<h2>General Discussion</h2>
+
+<h3>Versions and Frameworks</h3>
+
+<p>It is clear from the questions in Part I that this version of the SCEA exam was conceived in the EJB2 era of 2001-02. Therefore, the proposed architecture has been designed as though it too was requested at that time. Another possibility is that the customer specifically requested the use of this version for their own reasons (in house expertise or comfort with a stable and mature technology, for example). 
+
+<p>Since then the Java and the J2EE universe have evolved tremendously, and so too have the best-practices. In this light, there is no discussion of newer frameworks such as <a href="http://struts.apache.org/">Struts</a> or <a href="http://java.sun.com/javaee/javaserverfaces/">JavaServer Faces</a>. Neither is the vastly improved EJB3 specification with a new persistence model based on <a href="http://www.hibernate.org">Hibernate</a>. Similarly, the architecture does not use container managed authentication (eg. with <a href="http://java.sun.com/products/jaas/">JAAS</a>) but handles this issue at the application level instead.
+
+<p>If a client had come to me in the present day with the same needs as <i>Fly By Night</i> I would have considered and likely proposed an architecture based on the above mentionned frameworks. 
+
+<h3>Database Vendor</h3>
+<p>In the requirements, the business analyst states "The IMS database will be replaced with a relational database like Oracle, Sybase or Informix." However, in the interview the Fly-by-Night CIO specifically mentions their intention to use "an E6500 to host the Oracle database." Therefore, Oracle has been chosen as the underlying database for this application. 
+
+<p>It is important to note that despite choosing a specific vendor for the database, this architecture is in no way tied to any particular database implementation and is flexible enough to be used with any type of database the customers wishes to use now or in the future.
+
+
+<h3>Service Level Requirements</h3>
+
+<p><b>The system must be scalable:</b>
+<li><i>currently books 20,000 airfares per day </i>
+<li><i>expecting that to increase 10 fold within the first month of going national</i>
+<li><i>our current system has 35 concurrent Travel Agents </i>
+<li><i>we are projecting to have 20 Travel Agents and 200 web users concurrently using the system initially </i>
+<li><i>these numbers are expected to increase </i>
+<li><i>maximum of 20 Travel Agents and 600 web users</i>
+
+<p><b>The system must have good performance:</b>
+<li><i>Travel Agents response time must never exceed 5 seconds</i>
+<li><i>customer (web) response time cannot exceed 10 seconds more than 20% of the time</i>
+
+<p><b>The system must be secure:</b>
+<li><i>all interaction with the customer and the system must be secured with SSL</i>
+
+<p><b>The system must be extensible:</b>
+<li><i>if this project goes smoothly and the J2EE application servers prove to work, then we can talk about rewriting [the Frequent Flyer system]</i>
+
+
+<p>Other service level requirements (reliability, availability, maintainability, and manageability) are also important to the architecture and have been taken into consideration. Nevertheless, particular attention was paid to security, scalability, and performance since these consistently came up in the discussion with the customer.
+
+<h3>Stress Testing</h3>
+
+<p>To ensure the hardware and software combination is robust enough to meet the performance and scalability needs of Fly-By-Night, I recommend running stress tests with <a href="http://jakarta.apache.org/jmeter/">JMeter</a> before going into production with the given solution. This will provide a good level of confidence that the application will meet the present and future needs of the customer.
+
+<p>This will also provide an opportunity to demonstrate the vertical and horizontal scalability of the proposed solution.
+
+<h3>Security</h3>
+<p>In order to ensure communications with clients are confidential and secure, a minimum of 128-bit SSL is required. Anything less will be rejected by the web server. An appropriate certificate will have to be purchased and installed on the web server before deployment.
+
+<p>Travel agents are assumed to be on the company's private network and so are not required to use an encrypted protocol, though this could easily be arranged if the need were to arise, for example in a wide-area network or VPN situation. Furthermore, it is recommended that the travel agent's Swing application be digitally signed.
+
+<h3>Entities, CMP/BMP, DAO and TO</h3>
+
+<p>Because scalability is very important to our application, and the relationships between the business objects are quite complex, I have opted not to map every business object to an entity bean. Instead, the business operations are encapsulated by stateless session beans which in turn call upon the services of data-access objects (DAO) to manage the database access. The DAO returns a Transfer Object (TO) that is suitable to be sent across tiers.
+
+<p>Container-managed persistence (CMP) would be unable to provide the level of performance we require and an excessive number of entities would have increased the complexity of the object model to a point where maintainability would have been negatively impacted. Scalability is also impacted by the overuse of entity beans due to the increased network traffic required to maintain all the relationships.
+
+<p>Coarse-grained bean-managed persistence (BMP) entities are used to manage transaction sensitive data such as seat reservations in order to leverage the built-in services provided by the container. Otherwise, session beans involved in mostly read-only operations (flight searches, for example) will talk directly to the DAOs in order to increase performance. This is akin to the Fast Lane Reader pattern.
+
+<h3>Stateless vs. Stateful</h3>
+
+<p>All session beans are stateless to allow for maximum scalability. There is no need to maintain conversation state between the web and application tiers in this application.
+
+<p>A particular user's session state is maintained by the web tier in the HttpSession object. As such, it is possible that a user's session is lost in the event of a server crash, but this risk can be mitigated by selecting an application server that provides the ability to persist sessions (though it is not required by the specification, many vendors provide this feature). There are numerous advantages to keeping the user session on the web tier, notably easy implementation, portability, and scalability.
+
+<h3>Local and component interfaces</h3>
+
+The EJBs in this application will expose both component (previously known as remote) and local interfaces in order to improve performance and scalability. The presentation tier, be it web or Swing-based, will use the component interface. On the other hand, when beans are communicating with each other on the application server they will use the local interface. Entity beans will only be used locally, with a session bean providing remote access.
+
+<h3>Patterns In Use</h3>
+<li><b>Service Locators</b> are used to reduce the number of service object lookups. 
+<li><b>Transfer Objects</b> are used to reduce the amount of network chatter between tiers.
+<li><b>Fast Lane Readers</b> access the database directly through DAOs to improve read-only performance.
+<li><b>Business Delegates</b> are used to decouple the business tier from the presentation tier and improve network performance by reducing the number of calls across tiers. Especially useful to reuse the same EJBs with the web and Swing presentation.
+<li><b>Data Access Objects</b> are used to decouple the business tier from the database tier, to optimize the performance of BMP entity beans, and to implement the fast-lane reader.
+<li><b>Front Controllers</b> are used to process web client requests and to choose an appropriate views for presentation.
+
+
+<h2>Diagrams</h2>
+Note: For clarity's sake, I have not listed all the home and component interfaces in the following diagrams.
+
+<h3>Class Diagram</h3>
+(click for the full-size version)
+<li><a href="images/class_diagram.jpg">Fly-By-Night Class Diagram</a>
+
+<h3>Deployment Diagram</h3>
+(click for the full-size version)
+<li><a href="images/deployment.jpg">Fly-By-Night Deployment Diagram</a>
+
+<h3>Component Diagram</h3>
+(click for the full-size version)
+<li><a href="images/customer_component.jpg">Customer</a><br> 
+<li><a href="images/itinerary_component.jpg">Itinerary</a><br> 
+<li><a href="images/payment_component.jpg">Payment</a><br> 
+
+<h3>Sequence Diagrams</h3>
+<i>Note 1</i>: For simplicity's sake, JSPs have been omitted from the following diagrams. 
+They generate requests to the Controllers and display formatted results back to the user. The JSP pages can be found
+in the Component diagrams.<br>
+<i>Note 2</i>: For Travel Agents using the Swing user interface, calls are made directly to the session beans via business delegates. The Controller objects which are used for selecting and preparing views on the web.
+<p>(click for the full-size version)<br>
+
+<li><a href="images/login_and_create_profile.jpg">Login and Create Profile</a><br> 
+<li><a href="images/prepare_itinerary.jpg">Prepare Itinerary</a><br>
+<li><a href="images/change_itinerary.jpg">Change Itinerary</a><br>
+<li><a href="images/price_itinerary.jpg">Price Itinerary</a>
+<li><a href="images/pay_for_itinerary.jpg">Pay for Itinerary</a>
+
+
+<h3>Tools</h3>
+<li><a href="http://www.magicdraw.com">MagicDraw UML</a>
+<li><a href="http://www.vim.org">vim</a>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>
